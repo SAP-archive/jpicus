@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- project name="devtest" default="devtest" >
+    
+</project -->
+
+<project name="jpicus" default="dist">
+
+  <property file="jpicus.properties"/>
+  <property name="src.main" location="src/main"/>
+  <property name="src.test"  location="src/test"/>
+  <property name="lib.main"  location="lib/main"/>
+  <property name="lib.test"  location="lib/test"/>
+  <property name="build.main" location="build/main"/>
+  <property name="build.test" location="build/test"/>
+  <property name="dist"  location="dist"/> 
+  <property name="dist.testresults" location="${dist}/testresults"/>
+  <property name="tmp"  location="tmp"/>
+  <property name="dist.file.name" value="jpicus.jar" />
+  <property name="distfile" value="${dist}/${dist.file.name}"/>
+  <property name="client.jar" value="${dist}/com.sap.tools.jpicus.client.jar"/>
+  <property name="tests.jar" value="${dist}/tests.jar" />	
+  <property name="debug.port" value="5566" />
+  <property name="debug" value="false" />
+  <property name="optimize" value="true"/>
+  <property name="source" value="1.6"/>
+  <property name="target" value="1.6"/>
+	
+	<fileset id="junit" dir="${lib.test}">
+		<include name="junit-4.11.jar"/>
+		<include name="hamcrest-core-1.3.jar"/>
+	</fileset>
+
+	<fileset id="lib" dir="${lib.main}">
+		<include name="**/*.jar"/>
+	</fileset>
+	
+    <target name="dist" depends="functional_test">
+    </target>
+
+
+	<target name="devtest">
+    	<property name="boost.performance" value="true" />
+        <antcall target="functional_test" inheritall="true"/>
+    	
+    </target>
+	
+	
+	<target name="debug" depends="functional_test">
+		
+		<junit fork="yes" printsummary="on" maxmemory="32m">
+
+			<jvmarg value="-agentlib:jdwp=transport=dt_socket,suspend=y,address=localhost:${debug.port}"/>
+			<jvmarg value="-javaagent:${distfile}"/>
+			
+	
+			<classpath>
+   				<pathelement location="${build.test}"/>
+   				<pathelement path="${java.class.path}"/>
+				<fileset refid="junit" />		
+ 			</classpath>
+         
+			<batchtest fork="yes" todir="${dist.testresults}">
+				<formatter type="plain"/>
+		  		<fileset dir="${build.test}">
+      				<include name="com/sap/tools/jpicus/tests/FileInputStreamTest*"/>
+		  			<exclude name="com/sap/tools/jpicus/tests/util**/*"/>
+    			</fileset>
+  		  	</batchtest>
+
+		</junit>
+		
+		
+	</target>
+		
+	
+	
+	<target name="functional_test" depends="unit_tests" description="functional (black box) tests. Run with the agent enabled">
+		
+		<junit fork="yes" printsummary="on" maxmemory="512m"  haltonerror="false">
+
+			<jvmarg value="-javaagent:${distfile}=keepClosedHandles;trackSuccessfulDelete;trackFailedDelete;collectDeleteOfNonExisting;trackIO"/>
+			<jvmarg value="-XX:+HeapDumpOnOutOfMemoryError"/>
+			<jvmarg value="-Djpicus_functional_tests" />
+			<jvmarg value="-Dcom.sap.tools.jpicus.test.boostperformance=${boost.performance}" />
+			
+			<classpath>
+   				<pathelement location="${build.test}"/>
+   				<pathelement path="${java.class.path}"/>
+				<fileset refid="junit" />		
+ 			</classpath>
+         
+			<batchtest fork="yes" todir="${dist.testresults}">
+				<formatter type="plain"/>
+		  		<fileset dir="${build.test}">
+      				<include name="com/sap/tools/jpicus/tests/**/*"/>
+    			</fileset>
+  		  	</batchtest>
+
+		</junit>
+	</target>
+
+	<target name="unit_tests" depends="pack" description="Unit tests. Run without the agent">
+		<junit fork="yes" printsummary="on" maxmemory="32m" haltonerror="true">
+
+			<classpath>
+				<pathelement location="${build.main}"/>
+				<pathelement location="${build.test}"/>
+				<pathelement path="${java.class.path}"/>
+				<fileset refid="lib" />
+				<fileset refid="junit" />		
+			</classpath>
+	     
+			<batchtest fork="yes" todir="${dist.testresults}">
+				<formatter type="plain"/>
+		  		<fileset dir="${build.test}">
+	  				<exclude name="com/sap/tools/jpicus/tests/**/*"/>
+				</fileset>
+		  	</batchtest>
+	
+		</junit>
+	</target>
+	
+	<target name="pack" depends="compile">
+
+		<!-- unzip all the libs into a temp folder -->
+		<unzip dest="${tmp}">
+			<fileset dir="${lib.main}">
+        		<include name="**/*.jar"/>
+	    	</fileset>
+		</unzip>
+
+
+		<jar destfile="${distfile}" >
+			<fileset dir="${build.main}" />
+    		<fileset dir="${tmp}">	
+				<exclude name="META-INF/**"/>
+			</fileset>
+    		<fileset dir="${src.main}">	
+				<include name="META-INF/**"/>
+			</fileset>
+
+    		<manifest>
+      			<attribute name="Implementation-Vendor" value="sap.com"/>
+      		   	<attribute name="Implementation-Title" value="jpicus java agent"/>
+      		    <attribute name="Implementation-Version" value="timestamp"/>
+      			<attribute name="Premain-Class" value="com.sap.tools.jpicus.Agent" />
+    			<attribute name="Can-Redefine-Classes" value="true" />
+    			<attribute name="Can-Retransform-Classes" value="true" />
+    			<attribute name="Can-Set-Native-Method-Prefix" value="true" />
+    			<attribute name="Boot-Class-Path" value="${dist.file.name}" />
+   			</manifest>
+  		</jar>
+		
+
+		<jar destfile="${client.jar}" >
+			<fileset dir="${build.main}" >
+				<include name="com/sap/tools/jpicus/client/**/*" />
+				<include name="com/sap/tools/jpicus/impl/client/**/*" />
+				<include name="com/sap/tools/jpicus/impl/util/**/*" />
+				<include name="com/sap/tools/jpicus/impl/serializable/**/*" />
+				<include name="com/sap/tools/jpicus/OperationsState*" />
+			</fileset>
+			
+    		<fileset dir="${src.main}">	
+				<include name="META-INF/**"/>
+			</fileset>
+			
+			<manifest>
+      			<attribute name="Manifest-Version" value="1.0"/>
+      		   	<attribute name="Bundle-ManifestVersion" value="2"/>
+      		    <attribute name="Bundle-SymbolicName" value="com.sap.tools.jpicus.client"/>
+      			<attribute name="Bundle-Version" value="0.1" />
+    			<attribute name="Export-Package" value='com.sap.tools.jpicus.client;version="0.1"' />
+				<attribute name="Main-Class" value="com.sap.tools.jpicus.client.Main" />
+			</manifest>
+		</jar>
+		
+	</target>
+
+	
+	<target name="compile" depends="init">
+
+		<javac srcdir="${src.main}" destdir="${build.main}" debug="${debug}" optimize="${optimize}" source="${source}" target="${target}">
+		   	<classpath>
+				<fileset dir="${lib.main}">
+        			<include name="**/*.jar"/>
+      			</fileset>
+    		</classpath>
+		</javac>
+
+
+		<javac srcdir="${src.test}" destdir="${build.test}" debug="${debug}" optimize="${optimize}" source="${source}" target="${target}">
+		   	<classpath>
+				<fileset refid="lib"/>
+		   		<fileset refid="junit" />
+      			<pathelement location="${build.main}"/>
+    		</classpath>
+		</javac>
+
+	</target>
+
+
+ 	<target name="init" depends="clean">
+    	<tstamp/>
+    	<mkdir dir="${build.main}"/>
+		<mkdir dir="${build.test}"/>
+		<mkdir dir="${dist}"/>
+ 		<mkdir dir="${dist.testresults}" />
+		<mkdir dir="${tmp}"/>
+  	</target>
+
+	<target name="clean">
+		<delete dir="${build.main}"/>
+		<delete dir="${build.test}"/>
+ 		<delete dir="${dist}"/>
+		<delete dir="${tmp}"/>
+	</target>
+
+</project>
+
